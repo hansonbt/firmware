@@ -1428,7 +1428,7 @@ static void drawCompassNorth(OLEDDisplay *display, int16_t compassX, int16_t com
 
 /// Convert an integer GPS coords to a floating point
 #define DegD(i) (i * 1e-7)
-
+/*
 static void drawNodeInfo(OLEDDisplay *display, OLEDDisplayUiState *state, int16_t x, int16_t y)
 {
     // We only advance our nodeIndex if the frame # has changed - because
@@ -1563,6 +1563,209 @@ static void drawNodeInfo(OLEDDisplay *display, OLEDDisplayUiState *state, int16_
     }
     // Must be after distStr is populated
     drawColumns(display, x, y, fields);
+}
+*/
+
+static void drawNodeInfoMap(OLEDDisplay *display, OLEDDisplayUiState *state, int16_t x, int16_t y)
+{
+    // We only advance our nodeIndex if the frame # has changed - because
+    // drawNodeInfo will be called repeatedly while the frame is shown
+    if (state->currentFrame != prevFrame) {
+        prevFrame = state->currentFrame;
+    }
+
+    if (config.display.displaymode == meshtastic_Config_DisplayConfig_DisplayMode_INVERTED) {
+        display->fillRect(0 + x, 0 + y, x + display->getWidth(), y + FONT_HEIGHT_SMALL);
+    }
+
+    display->setFont(FONT_SMALL);
+    // The coordinates define the left starting point of the text
+    display->setTextAlignment(TEXT_ALIGN_LEFT);
+
+    meshtastic_NodeInfoLite *ourNode = nodeDB->getMeshNode(nodeDB->getNodeNum());
+
+    int16_t map_offset_w = 2;
+    int16_t map_offset_h = 2;
+    int16_t map_dim_w = 80;
+    int16_t map_dim_h = 160;
+
+    float x0_gps = -118.48362524758959;
+    float x1_gps = -118.46955881796222;
+    float x_gps = 0.0;
+
+    float y0_gps = 33.994292354093766;
+    float y1_gps = 33.98449037415861;
+    float y_gps = 0.0;
+
+    float w_gps = (x0_gps > 0.0) ? x0_gps - x1_gps : x1_gps - x0_gps;
+    float h_gps = (y0_gps > 0.0) ? y0_gps - y1_gps : y1_gps - y0_gps;
+    float x_pct_op = 0.0;
+    float y_pct_op = 0.0;
+
+    int16_t x0 = map_offset_w;
+    int16_t x1 = map_offset_w + map_dim_w;
+
+    int16_t y0 = map_offset_h;
+    int16_t y1 = map_offset_h + map_dim_h;
+
+    // Draw map outline
+    display->drawRect(x0, y0, x1, y1);
+
+    if (ourNode && hasValidPosition(ourNode)) {
+        const meshtastic_PositionLite &op = ourNode->position;
+        x_pct_op = (x0_gps > 0.0) ? (x0_gps - DegD(op.longitude_i)) / w_gps : (DegD(op.longitude_i) - x0_gps) / w_gps;
+        y_pct_op = (y0_gps > 0.0) ? (y0_gps - DegD(op.latitude_i)) / h_gps : (DegD(op.latitude_i) - y0_gps) / h_gps;
+        float _x = round(x_pct_op * map_dim_w);
+        float _y = round(y_pct_op * map_dim_h);
+        display->drawTriangle(_x - 2, _y + 2, _x, _y - 2, _x + 2, _y + 2);
+    } else {
+            x_pct_op = -0.01;
+            y_pct_op = -0.01;
+    }
+
+    for (uint8_t n_idx = 0; n_idx < nodeDB->getNumMeshNodes(); n_idx++){
+
+        meshtastic_NodeInfoLite *node = nodeDB->getMeshNodeByIndex(n_idx);
+        static char myCoord[20];
+        if (node->num == nodeDB->getNodeNum()) {
+            snprintf(myCoord, sizeof(myCoord), "%s (%d, %d)", ourNode->user.short_name, round(x_pct_op * 100), round(y_pct_op * 100));
+            const char *fields[] = {myCoord, NULL};
+            drawColumns(display, x1 + 3, n_idx * FONT_HEIGHT_SMALL + 2, fields);
+            continue;
+        }
+
+        const char *username = node->has_user ? node->user.short_name : "???";
+
+        float x_pct_p = 0.0;
+        float y_pct_p = 0.0;
+        if (hasValidPosition(node)) {
+            const meshtastic_PositionLite &p = node->position;
+
+            x_pct_p = (x0_gps > 0.0) ? (x0_gps - DegD(p.longitude_i)) / w_gps : (DegD(p.longitude_i) - x0_gps) / w_gps;
+            y_pct_p = (y0_gps > 0.0) ? (y0_gps - DegD(p.latitude_i)) / h_gps : (DegD(p.latitude_i) - y0_gps) / h_gps;
+            float _x = round(x_pct_p * map_dim_w);
+            float _y = round(y_pct_p * map_dim_h);
+            display->drawCircle(_x, _y, 2);
+            display->setFont(FONT_SMALL);
+            String abbr(username[0]);
+            display->drawString(_x + 3, _y - (FONT_HEIGHT_SMALL / 2), abbr);
+        } else {
+            x_pct_p = -0.01;
+            y_pct_p = -0.01;
+        }
+
+        static char signalStr[20];
+
+        // section here to choose whether to display hops away rather than signal strength if more than 0 hops away.
+        if (node->hops_away > 0) {
+            snprintf(signalStr, sizeof(signalStr), "Hops Away: %d", node->hops_away);
+        } else {
+            snprintf(signalStr, sizeof(signalStr), "Signal: %d%%", clamp((int)((node->snr + 10) * 5), 0, 100));
+        }
+
+        uint32_t agoSecs = sinceLastSeenLoc(node);
+        // uint32_t agoSecs = node->position.time;
+        static char lastStr[20];
+
+        // Use an absolute timestamp in some cases.
+        // Particularly useful with E-Ink displays. Static UI, fewer refreshes.
+        uint8_t timestampHours, timestampMinutes;
+        int32_t daysAgo;
+
+        bool useTimestamp = deltaToTimestamp(agoSecs, &timestampHours, &timestampMinutes, &daysAgo);
+
+        if (agoSecs < 90) // last 2 mins?
+            snprintf(lastStr, sizeof(lastStr), "%s: %us (%d, %d)", username, agoSecs, round(x_pct_p * 100), round(y_pct_p * 100));
+        // -- if suitable for timestamp --
+        else if (agoSecs < 90 * SECONDS_IN_MINUTE) // Last 15 minutes
+            snprintf(lastStr, sizeof(lastStr), "%s: %um (%d, %d)", username, agoSecs / SECONDS_IN_MINUTE, round(x_pct_p * 100), round(y_pct_p * 100));
+        else if ((agoSecs / 60 / 60) < 10)
+            snprintf(lastStr, sizeof(lastStr), "%s: %.1fh (%d, %d)", username, float(agoSecs) / 60 / 60, round(x_pct_p * 100), round(y_pct_p * 100));
+        else if ((agoSecs / 60 / 60) < 24)
+            snprintf(lastStr, sizeof(lastStr), "%s: %uh (%d, %d)", username, agoSecs / 60 / 60, round(x_pct_p * 100), round(y_pct_p * 100));
+        else if (daysAgo >= 1 && daysAgo <= 9) // Last six months (capped by deltaToTimestamp method)
+            snprintf(lastStr, sizeof(lastStr), "%s: %lid (%d, %d)", username, (long)daysAgo, round(x_pct_p * 100), round(y_pct_p * 100));
+        else
+            snprintf(lastStr, sizeof(lastStr), "%s: ? (%d, %d)", username, round(x_pct_p * 100), round(y_pct_p * 100));
+
+        static char distStr[20];
+
+        if (config.display.units == meshtastic_Config_DisplayConfig_DisplayUnits_IMPERIAL) {
+            strncpy(distStr, "? mi", sizeof(distStr)); // might not have location data
+        } else {
+            strncpy(distStr, "? km", sizeof(distStr));
+        }
+
+
+        // const char *fields[] = {username, lastStr, signalStr, distStr, NULL};
+        const char *fields[] = {lastStr, NULL};
+        int16_t compassX = 0, compassY = 0;
+
+        // coordinates for the center of the compass/circle
+        if (config.display.displaymode == meshtastic_Config_DisplayConfig_DisplayMode_DEFAULT) {
+            compassX = x + SCREEN_WIDTH - getCompassDiam(display) / 2 - 5;
+            compassY = y + SCREEN_HEIGHT / 2;
+        } else {
+            compassX = x + SCREEN_WIDTH - getCompassDiam(display) / 2 - 5;
+            compassY = y + FONT_HEIGHT_SMALL + (SCREEN_HEIGHT - FONT_HEIGHT_SMALL) / 2;
+        }
+        bool hasNodeHeading = false;
+
+        if (ourNode && hasValidPosition(ourNode)) {
+            const meshtastic_PositionLite &op = ourNode->position;
+            float myHeading = estimatedHeading(DegD(op.latitude_i), DegD(op.longitude_i));
+            // drawCompassNorth(display, compassX, compassY, myHeading);
+
+            if (hasValidPosition(node)) {
+                // display direction toward node
+                hasNodeHeading = true;
+                const meshtastic_PositionLite &p = node->position;
+                float d =
+                    GeoCoord::latLongToMeter(DegD(p.latitude_i), DegD(p.longitude_i), DegD(op.latitude_i), DegD(op.longitude_i));
+
+                if (config.display.units == meshtastic_Config_DisplayConfig_DisplayUnits_IMPERIAL) {
+                    if (d < (2 * MILES_TO_FEET))
+                        snprintf(distStr, sizeof(distStr), "%.0f ft", d * METERS_TO_FEET);
+                    else
+                        snprintf(distStr, sizeof(distStr), "%.1f mi", d * METERS_TO_FEET / MILES_TO_FEET);
+                } else {
+                    if (d < 2000)
+                        snprintf(distStr, sizeof(distStr), "%.0f m", d);
+                    else
+                        snprintf(distStr, sizeof(distStr), "%.1f km", d / 1000);
+                }
+
+                float bearingToOther =
+                    GeoCoord::bearing(DegD(op.latitude_i), DegD(op.longitude_i), DegD(p.latitude_i), DegD(p.longitude_i));
+                // If the top of the compass is a static north then bearingToOther can be drawn on the compass directly
+                // If the top of the compass is not a static north we need adjust bearingToOther based on heading
+                if (!config.display.compass_north_top)
+                    bearingToOther -= myHeading;
+                // drawNodeHeading(display, compassX, compassY, bearingToOther);
+            }
+        }
+        if (!hasNodeHeading) {
+            // direction to node is unknown so display question mark
+            // Debug info for gps lock errors
+            // LOG_DEBUG("ourNode %d, ourPos %d, theirPos %d\n", !!ourNode, ourNode && hasValidPosition(ourNode),
+            // hasValidPosition(node));
+            // display->drawString(32 - FONT_HEIGHT_SMALL, 32 - FONT_HEIGHT_SMALL, "?");
+        }
+
+        drawColumns(display, x1 + 3, n_idx * FONT_HEIGHT_SMALL + 2, fields);
+    }
+
+        // display->drawRect(map_offset_w, map_offset_h, map_dim_w - (2*map_offset_w), map_dim_h - (2*map_offset_h));
+        // display->drawRect(0 + x, 0 + y, x + map_dim_w, y + map_dim_h);
+        // display->drawRect(compassX, compassY, compassX + map_dim_w, compassY + map_dim_h);
+        // snprintf(distStr, sizeof(distStr), "%d, %d, %d, %d", map_offset_h, map_offset_h, map_offset_h + map_dim_w, map_offset_h + map_dim_h);
+        // snprintf(distStr, sizeof(distStr), "%.2f, %.2f", x_pct_op, y_pct_op);
+
+    if (config.display.displaymode == meshtastic_Config_DisplayConfig_DisplayMode_INVERTED) {
+        display->setColor(BLACK);
+    }
+    // Must be after distStr is populated
+    // drawColumns(display, x1 + 3, y, fields);
 }
 
 Screen::Screen(ScanI2C::DeviceAddress address, meshtastic_Config_DisplayConfig_OledType screenType, OLEDDISPLAY_GEOMETRY geometry)
@@ -2109,9 +2312,13 @@ void Screen::setFrames()
 
     // then all the nodes
     // We only show a few nodes in our scrolling list - because meshes with many nodes would have too many screens
+    /*
     size_t numToShow = min(numMeshNodes, 4U);
     for (size_t i = 0; i < numToShow; i++)
-        normalFrames[numframes++] = drawNodeInfo;
+        normalFrames[numframes++] = drawNodeInfoMap;
+    */
+
+    normalFrames[numframes++] = drawNodeInfoMap;
 
     // then the debug info
     //

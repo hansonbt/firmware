@@ -784,6 +784,17 @@ uint32_t sinceLastSeen(const meshtastic_NodeInfoLite *n)
     return delta;
 }
 
+uint32_t sinceLastSeenLoc(const meshtastic_NodeInfoLite *n)
+{
+    uint32_t now = getTime();
+
+    int delta = (int)(now - n->position.time);
+    if (delta < 0) // our clock must be slightly off still - not set from GPS yet
+        delta = 0;
+
+    return delta;
+}
+
 uint32_t sinceReceived(const meshtastic_MeshPacket *p)
 {
     uint32_t now = getTime();
