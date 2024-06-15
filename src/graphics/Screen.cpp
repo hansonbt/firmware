@@ -1675,18 +1675,18 @@ static void drawNodeInfoMap(OLEDDisplay *display, OLEDDisplayUiState *state, int
         bool useTimestamp = deltaToTimestamp(agoSecs, &timestampHours, &timestampMinutes, &daysAgo);
 
         if (agoSecs < 90) // last 2 mins?
-            snprintf(lastStr, sizeof(lastStr), "%s: %us (%d, %d)", username, agoSecs, round(x_pct_p * 100), round(y_pct_p * 100));
+            snprintf(lastStr, sizeof(lastStr), "%s: %us (%d,%d)", username, agoSecs, round(x_pct_p * 100), round(y_pct_p * 100));
         // -- if suitable for timestamp --
         else if (agoSecs < 90 * SECONDS_IN_MINUTE) // Last 15 minutes
-            snprintf(lastStr, sizeof(lastStr), "%s: %um (%d, %d)", username, agoSecs / SECONDS_IN_MINUTE, round(x_pct_p * 100), round(y_pct_p * 100));
+            snprintf(lastStr, sizeof(lastStr), "%s: %um (%d,%d)", username, agoSecs / SECONDS_IN_MINUTE, round(x_pct_p * 100), round(y_pct_p * 100));
         else if ((agoSecs / 60 / 60) < 10)
-            snprintf(lastStr, sizeof(lastStr), "%s: %.1fh (%d, %d)", username, float(agoSecs) / 60 / 60, round(x_pct_p * 100), round(y_pct_p * 100));
+            snprintf(lastStr, sizeof(lastStr), "%s: %.1fh (%d,%d)", username, float(agoSecs) / 60 / 60, round(x_pct_p * 100), round(y_pct_p * 100));
         else if ((agoSecs / 60 / 60) < 24)
-            snprintf(lastStr, sizeof(lastStr), "%s: %uh (%d, %d)", username, agoSecs / 60 / 60, round(x_pct_p * 100), round(y_pct_p * 100));
+            snprintf(lastStr, sizeof(lastStr), "%s: %uh (%d,%d)", username, agoSecs / 60 / 60, round(x_pct_p * 100), round(y_pct_p * 100));
         else if (daysAgo >= 1 && daysAgo <= 9) // Last six months (capped by deltaToTimestamp method)
-            snprintf(lastStr, sizeof(lastStr), "%s: %lid (%d, %d)", username, (long)daysAgo, round(x_pct_p * 100), round(y_pct_p * 100));
+            snprintf(lastStr, sizeof(lastStr), "%s: %lid (%d,%d)", username, (long)daysAgo, round(x_pct_p * 100), round(y_pct_p * 100));
         else
-            snprintf(lastStr, sizeof(lastStr), "%s: ? (%d, %d)", username, round(x_pct_p * 100), round(y_pct_p * 100));
+            snprintf(lastStr, sizeof(lastStr), "%s: ? (%d,%d)", username, round(x_pct_p * 100), round(y_pct_p * 100));
 
         static char distStr[20];
 
