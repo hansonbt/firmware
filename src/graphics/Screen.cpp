@@ -1054,6 +1054,13 @@ static void drawTextMessageFrame(OLEDDisplay *display, OLEDDisplayUiState *state
     } else if (strcmp(reinterpret_cast<const char *>(mp.decoded.payload.bytes), u8"♥️") == 0) {
         display->drawXbm(x + (SCREEN_WIDTH - heart_width) / 2,
                          y + (SCREEN_HEIGHT - FONT_HEIGHT_MEDIUM - heart_height) / 2 + 2 + 5, heart_width, heart_height, heart);
+    } else if (strcmp(reinterpret_cast<const char *>(mp.decoded.payload.bytes), "???") == 0) {
+        snprintf(tempBuf, sizeof(tempBuf), "%s (send loc)", mp.decoded.payload.bytes);
+        display->drawStringMaxWidth(0 + x, 0 + y + FONT_HEIGHT_SMALL, x + display->getWidth(), tempBuf);
+
+        // send loc
+        service.refreshLocalMeshNode();
+        auto sentPosition = service.trySendPosition(NODENUM_BROADCAST, true);
     } else {
         snprintf(tempBuf, sizeof(tempBuf), "%s", mp.decoded.payload.bytes);
         display->drawStringMaxWidth(0 + x, 0 + y + FONT_HEIGHT_SMALL, x + display->getWidth(), tempBuf);
@@ -1611,13 +1618,44 @@ static void drawNodeInfoMap(OLEDDisplay *display, OLEDDisplayUiState *state, int
     // Draw map outline
     display->drawRect(x0, y0, x1, y1);
 
+    /*
+    DRAW LANDMARK SYMBOLS
+    */
+    // 33.98730162924576, -118.47549733831522
+    float _lat = 33.98730162924576;
+    float _lon = -118.47549733831522;
+    float x_pct_s = (x0_gps > 0.0) ? (x0_gps - _lon) / w_gps : (_lon - x0_gps) / w_gps;
+    float y_pct_s = (y0_gps > 0.0) ? (y0_gps - _lat) / h_gps : (_lat - y0_gps) / h_gps;
+    float _x_s = round(x_pct_s * map_dim_w);
+    float _y_s = round(y_pct_s * map_dim_h);
+
+    display->drawXbm(_x_s + map_offset_w - (landmark_width / 2), _y_s + map_offset_w + (landmark_height / 2),
+                            landmark_width, landmark_height, landmark_honeycomb);
+
+    static char landmark_loc[20];
+    snprintf(landmark_loc, sizeof(landmark_loc), "Honey:(%d, %d)", round(x_pct_s * 100), round(y_pct_s * 100));
+
+    // 33.98776623944731, -118.472271235067543
+    _lat = 33.98776623944731;
+    _lon = -118.472271235067543;
+    x_pct_s = (x0_gps > 0.0) ? (x0_gps - _lon) / w_gps : (_lon - x0_gps) / w_gps;
+    y_pct_s = (y0_gps > 0.0) ? (y0_gps - _lat) / h_gps : (_lat - y0_gps) / h_gps;
+    _x_s = round(x_pct_s * map_dim_w);
+    _y_s = round(y_pct_s * map_dim_h);
+    display->drawXbm(_x_s + map_offset_w - (landmark_width / 2), _y_s + map_offset_w + (landmark_height / 2),
+                            landmark_width, landmark_height, landmark_forest);
+
+
+
+
     if (ourNode && hasValidPosition(ourNode)) {
         const meshtastic_PositionLite &op = ourNode->position;
         x_pct_op = (x0_gps > 0.0) ? (x0_gps - DegD(op.longitude_i)) / w_gps : (DegD(op.longitude_i) - x0_gps) / w_gps;
         y_pct_op = (y0_gps > 0.0) ? (y0_gps - DegD(op.latitude_i)) / h_gps : (DegD(op.latitude_i) - y0_gps) / h_gps;
         float _x = round(x_pct_op * map_dim_w);
         float _y = round(y_pct_op * map_dim_h);
-        display->drawTriangle(_x - 2, _y + 2, _x, _y - 2, _x + 2, _y + 2);
+        // display->drawTriangle(_x - 3, _y + 3, _x, _y - 3, _x + 3, _y + 3);
+        display->drawFastImage(_x - 3, _y - 4, 6, 8, imgPositionEmpty);
     } else {
             x_pct_op = -0.01;
             y_pct_op = -0.01;
@@ -1628,13 +1666,16 @@ static void drawNodeInfoMap(OLEDDisplay *display, OLEDDisplayUiState *state, int
         meshtastic_NodeInfoLite *node = nodeDB->getMeshNodeByIndex(n_idx);
         static char myCoord[20];
         if (node->num == nodeDB->getNodeNum()) {
+            display->drawFastImage(x1 + 2, n_idx * FONT_HEIGHT_SMALL + 2, 6, 8, gpsStatus->getHasLock() ? imgPositionSolid : imgPositionEmpty);
             snprintf(myCoord, sizeof(myCoord), "%s (%d, %d)", ourNode->user.short_name, round(x_pct_op * 100), round(y_pct_op * 100));
             const char *fields[] = {myCoord, NULL};
-            drawColumns(display, x1 + 3, n_idx * FONT_HEIGHT_SMALL + 2, fields);
+            drawColumns(display, x1 + 10, n_idx * FONT_HEIGHT_SMALL + 2, fields);
             continue;
         }
 
         const char *username = node->has_user ? node->user.short_name : "???";
+
+        uint32_t agoSecs = sinceLastSeenLoc(node);
 
         float x_pct_p = 0.0;
         float y_pct_p = 0.0;
@@ -1645,10 +1686,12 @@ static void drawNodeInfoMap(OLEDDisplay *display, OLEDDisplayUiState *state, int
             y_pct_p = (y0_gps > 0.0) ? (y0_gps - DegD(p.latitude_i)) / h_gps : (DegD(p.latitude_i) - y0_gps) / h_gps;
             float _x = round(x_pct_p * map_dim_w);
             float _y = round(y_pct_p * map_dim_h);
-            display->drawCircle(_x, _y, 2);
-            display->setFont(FONT_SMALL);
-            String abbr(username[0]);
-            display->drawString(_x + 3, _y - (FONT_HEIGHT_SMALL / 2), abbr);
+            if ((agoSecs / 60 / 60) < 24) {
+                display->drawCircle(_x, _y, 2);
+                display->setFont(FONT_SMALL);
+                String abbr(username[0]);
+                display->drawString(_x + 3, _y - (FONT_HEIGHT_SMALL / 2), abbr);
+            }
         } else {
             x_pct_p = -0.01;
             y_pct_p = -0.01;
@@ -1663,7 +1706,6 @@ static void drawNodeInfoMap(OLEDDisplay *display, OLEDDisplayUiState *state, int
             snprintf(signalStr, sizeof(signalStr), "Signal: %d%%", clamp((int)((node->snr + 10) * 5), 0, 100));
         }
 
-        uint32_t agoSecs = sinceLastSeenLoc(node);
         // uint32_t agoSecs = node->position.time;
         static char lastStr[20];
 
@@ -1696,61 +1738,8 @@ static void drawNodeInfoMap(OLEDDisplay *display, OLEDDisplayUiState *state, int
             strncpy(distStr, "? km", sizeof(distStr));
         }
 
-
         // const char *fields[] = {username, lastStr, signalStr, distStr, NULL};
         const char *fields[] = {lastStr, NULL};
-        int16_t compassX = 0, compassY = 0;
-
-        // coordinates for the center of the compass/circle
-        if (config.display.displaymode == meshtastic_Config_DisplayConfig_DisplayMode_DEFAULT) {
-            compassX = x + SCREEN_WIDTH - getCompassDiam(display) / 2 - 5;
-            compassY = y + SCREEN_HEIGHT / 2;
-        } else {
-            compassX = x + SCREEN_WIDTH - getCompassDiam(display) / 2 - 5;
-            compassY = y + FONT_HEIGHT_SMALL + (SCREEN_HEIGHT - FONT_HEIGHT_SMALL) / 2;
-        }
-        bool hasNodeHeading = false;
-
-        if (ourNode && hasValidPosition(ourNode)) {
-            const meshtastic_PositionLite &op = ourNode->position;
-            float myHeading = estimatedHeading(DegD(op.latitude_i), DegD(op.longitude_i));
-            // drawCompassNorth(display, compassX, compassY, myHeading);
-
-            if (hasValidPosition(node)) {
-                // display direction toward node
-                hasNodeHeading = true;
-                const meshtastic_PositionLite &p = node->position;
-                float d =
-                    GeoCoord::latLongToMeter(DegD(p.latitude_i), DegD(p.longitude_i), DegD(op.latitude_i), DegD(op.longitude_i));
-
-                if (config.display.units == meshtastic_Config_DisplayConfig_DisplayUnits_IMPERIAL) {
-                    if (d < (2 * MILES_TO_FEET))
-                        snprintf(distStr, sizeof(distStr), "%.0f ft", d * METERS_TO_FEET);
-                    else
-                        snprintf(distStr, sizeof(distStr), "%.1f mi", d * METERS_TO_FEET / MILES_TO_FEET);
-                } else {
-                    if (d < 2000)
-                        snprintf(distStr, sizeof(distStr), "%.0f m", d);
-                    else
-                        snprintf(distStr, sizeof(distStr), "%.1f km", d / 1000);
-                }
-
-                float bearingToOther =
-                    GeoCoord::bearing(DegD(op.latitude_i), DegD(op.longitude_i), DegD(p.latitude_i), DegD(p.longitude_i));
-                // If the top of the compass is a static north then bearingToOther can be drawn on the compass directly
-                // If the top of the compass is not a static north we need adjust bearingToOther based on heading
-                if (!config.display.compass_north_top)
-                    bearingToOther -= myHeading;
-                // drawNodeHeading(display, compassX, compassY, bearingToOther);
-            }
-        }
-        if (!hasNodeHeading) {
-            // direction to node is unknown so display question mark
-            // Debug info for gps lock errors
-            // LOG_DEBUG("ourNode %d, ourPos %d, theirPos %d\n", !!ourNode, ourNode && hasValidPosition(ourNode),
-            // hasValidPosition(node));
-            // display->drawString(32 - FONT_HEIGHT_SMALL, 32 - FONT_HEIGHT_SMALL, "?");
-        }
 
         drawColumns(display, x1 + 3, n_idx * FONT_HEIGHT_SMALL + 2, fields);
     }
@@ -2301,6 +2290,8 @@ void Screen::setFrames()
     normalFrames[numframes++] = screen->digitalWatchFace ? &Screen::drawDigitalClockFrame : &Screen::drawAnalogClockFrame;
 #endif
 
+    normalFrames[numframes++] = drawNodeInfoMap;
+
     // If we have a text message - show it next, unless it's a phone message and we aren't using any special modules
     if (devicestate.has_rx_text_message && shouldDrawMessage(&devicestate.rx_text_message)) {
         normalFrames[numframes++] = drawTextMessageFrame;
@@ -2317,8 +2308,6 @@ void Screen::setFrames()
     for (size_t i = 0; i < numToShow; i++)
         normalFrames[numframes++] = drawNodeInfoMap;
     */
-
-    normalFrames[numframes++] = drawNodeInfoMap;
 
     // then the debug info
     //
