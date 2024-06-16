@@ -999,6 +999,8 @@ static void drawTextMessageFrame(OLEDDisplay *display, OLEDDisplayUiState *state
                                  screen->drawTimeDelta(days, hours, minutes, seconds).c_str(),
                                  (node && node->has_user) ? node->user.short_name : "???");
         }
+
+        
     }
 
     display->setColor(WHITE);
@@ -1062,13 +1064,14 @@ static void drawTextMessageFrame(OLEDDisplay *display, OLEDDisplayUiState *state
         service.refreshLocalMeshNode();
         auto sentPosition = service.trySendPosition(NODENUM_BROADCAST, true);
     } else {
-        snprintf(tempBuf, sizeof(tempBuf), "%s", mp.decoded.payload.bytes);
+        snprintf(tempBuf, sizeof(tempBuf), "%s\n", mp.decoded.payload.bytes);
         display->drawStringMaxWidth(0 + x, 0 + y + FONT_HEIGHT_SMALL, x + display->getWidth(), tempBuf);
     }
 #else
     snprintf(tempBuf, sizeof(tempBuf), "%s", mp.decoded.payload.bytes);
     display->drawStringMaxWidth(0 + x, 0 + y + FONT_HEIGHT_SMALL, x + display->getWidth(), tempBuf);
 #endif
+    screen->print(tempBuf);
 }
 
 /// Draw the last waypoint we received
@@ -1325,6 +1328,76 @@ class Point
     }
 };
 
+/*
+class PointGPS
+{
+  public:
+    float lat, lon;
+    int16_t x0_gps, x1_gps, y0_gps, y1_gps = 0.0;
+    float w_gps, h_gps = 0.0;
+    float x_pct, y_pct = 0.0
+    int16_t x_pos, y_pos = 0;
+
+
+    PointGPS(float _lat, float _lon) : lat(_lat), lon(_lon) {}
+
+
+    void calc_positions(Point &gps0, Point &gps1){
+        w_gps = (x0_gps > 0.0) ? x0_gps - x1_gps : x1_gps - x0_gps;
+        h_gps = (y0_gps > 0.0) ? y0_gps - y1_gps : y1_gps - y0_gps;
+
+        x_pct = (x0_gps > 0.0) ? (x0_gps - lon) / w_gps : (lon) - x0_gps) / w_gps;
+        y_pct = (y0_gps > 0.0) ? (y0_gps - DegD(p.latitude_i)) / h_gps : (DegD(p.latitude_i) - y0_gps) / h_gps;
+
+        x_pos = round(x_pct * 100);
+        y_pos = round(y_pct * 100);
+    }
+
+
+    /// Apply a rotation around zero (standard rotation matrix math)
+    void rotate(float radian)
+    {
+        float cos = cosf(radian), sin = sinf(radian);
+        float rx = x * cos + y * sin, ry = -x * sin + y * cos;
+
+        x = rx;
+        y = ry;
+    }
+
+    void translate(int16_t dx, int dy)
+    {
+        x += dx;
+        y += dy;
+    }
+
+    void scale(float f)
+    {
+        // We use -f here to counter the flip that happens
+        // on the y axis when drawing and rotating on screen
+        x *= f;
+        y *= -f;
+    }
+};
+*/
+
+struct PointGPS
+{
+     double lat;
+     double lon;
+};
+
+struct PointPct
+{
+     double x;
+     double y;
+};
+
+struct PointXY
+{
+     int x;
+     int y;
+};
+
 } // namespace
 
 static void drawLine(OLEDDisplay *d, const Point &p1, const Point &p2)
@@ -1573,6 +1646,7 @@ static void drawNodeInfo(OLEDDisplay *display, OLEDDisplayUiState *state, int16_
 }
 */
 
+
 static void drawNodeInfoMap(OLEDDisplay *display, OLEDDisplayUiState *state, int16_t x, int16_t y)
 {
     // We only advance our nodeIndex if the frame # has changed - because
@@ -1591,32 +1665,21 @@ static void drawNodeInfoMap(OLEDDisplay *display, OLEDDisplayUiState *state, int
 
     meshtastic_NodeInfoLite *ourNode = nodeDB->getMeshNode(nodeDB->getNodeNum());
 
-    int16_t map_offset_w = 2;
-    int16_t map_offset_h = 2;
-    int16_t map_dim_w = 80;
-    int16_t map_dim_h = 160;
+    PointXY MAP_DIM = {lround(SCREEN_HEIGHT * 0.8),  SCREEN_HEIGHT};
+    PointXY MAP_OFFSET = {0, 0};
+    PointXY MAP_MIN = {MAP_OFFSET.x, MAP_OFFSET.y};
+    PointXY MAP_MAX = {MAP_OFFSET.x + MAP_DIM.x, MAP_OFFSET.y + MAP_DIM.y};
+    // top left, bottom reight
+    PointGPS GPS_MIN = { 33.994292354093766, -118.48362524758959};
+    PointGPS GPS_MAX = { 33.98449037415861, -118.46955881796222};
+    PointGPS GPS_DIFF = {(GPS_MIN.lat > 0.0) ? GPS_MIN.lat - GPS_MAX.lat : GPS_MAX.lat - GPS_MIN.lat,
+                         (GPS_MIN.lon > 0.0) ? GPS_MIN.lon - GPS_MAX.lon : GPS_MAX.lon - GPS_MIN.lon};
 
-    float x0_gps = -118.48362524758959;
-    float x1_gps = -118.46955881796222;
-    float x_gps = 0.0;
-
-    float y0_gps = 33.994292354093766;
-    float y1_gps = 33.98449037415861;
-    float y_gps = 0.0;
-
-    float w_gps = (x0_gps > 0.0) ? x0_gps - x1_gps : x1_gps - x0_gps;
-    float h_gps = (y0_gps > 0.0) ? y0_gps - y1_gps : y1_gps - y0_gps;
-    float x_pct_op = 0.0;
-    float y_pct_op = 0.0;
-
-    int16_t x0 = map_offset_w;
-    int16_t x1 = map_offset_w + map_dim_w;
-
-    int16_t y0 = map_offset_h;
-    int16_t y1 = map_offset_h + map_dim_h;
+    // float x_pct_op, y_pct_op = 0.0;
+    int16_t x_pos_op, y_pos_op = 0;
 
     // Draw map outline
-    display->drawRect(x0, y0, x1, y1);
+    display->drawRect(MAP_MIN.x, MAP_MIN.y, MAP_MAX.x, MAP_MAX.y);
 
     /*
     DRAW LANDMARK SYMBOLS
@@ -1624,41 +1687,42 @@ static void drawNodeInfoMap(OLEDDisplay *display, OLEDDisplayUiState *state, int
     // 33.98730162924576, -118.47549733831522
     float _lat = 33.98730162924576;
     float _lon = -118.47549733831522;
-    float x_pct_s = (x0_gps > 0.0) ? (x0_gps - _lon) / w_gps : (_lon - x0_gps) / w_gps;
-    float y_pct_s = (y0_gps > 0.0) ? (y0_gps - _lat) / h_gps : (_lat - y0_gps) / h_gps;
-    float _x_s = round(x_pct_s * map_dim_w);
-    float _y_s = round(y_pct_s * map_dim_h);
 
-    display->drawXbm(_x_s + map_offset_w - (landmark_width / 2), _y_s + map_offset_w + (landmark_height / 2),
+    float x_pct_s = (GPS_MIN.lon > 0.0) ? (GPS_MIN.lon - _lon) / GPS_DIFF.lon : (_lon - GPS_MIN.lon) / GPS_DIFF.lon;
+    float y_pct_s = (GPS_MIN.lat > 0.0) ? (GPS_MIN.lat - _lat) / GPS_DIFF.lat : (_lat - GPS_MIN.lat) / GPS_DIFF.lat;
+    float _x_s = lround(x_pct_s * MAP_DIM.x);
+    float _y_s = lround(y_pct_s * MAP_DIM.y);
+
+    display->drawXbm(_x_s + MAP_OFFSET.x - (landmark_width / 2), _y_s + MAP_OFFSET.y + (landmark_height / 2),
                             landmark_width, landmark_height, landmark_honeycomb);
-
-    static char landmark_loc[20];
-    snprintf(landmark_loc, sizeof(landmark_loc), "Honey:(%d, %d)", round(x_pct_s * 100), round(y_pct_s * 100));
 
     // 33.98776623944731, -118.472271235067543
     _lat = 33.98776623944731;
     _lon = -118.472271235067543;
-    x_pct_s = (x0_gps > 0.0) ? (x0_gps - _lon) / w_gps : (_lon - x0_gps) / w_gps;
-    y_pct_s = (y0_gps > 0.0) ? (y0_gps - _lat) / h_gps : (_lat - y0_gps) / h_gps;
-    _x_s = round(x_pct_s * map_dim_w);
-    _y_s = round(y_pct_s * map_dim_h);
-    display->drawXbm(_x_s + map_offset_w - (landmark_width / 2), _y_s + map_offset_w + (landmark_height / 2),
+    x_pct_s = (GPS_MIN.lon > 0.0) ? (GPS_MIN.lon - _lon) / GPS_DIFF.lon : (_lon - GPS_MIN.lon) / GPS_DIFF.lon;
+    y_pct_s = (GPS_MIN.lat > 0.0) ? (GPS_MIN.lat - _lat) / GPS_DIFF.lat : (_lat - GPS_MIN.lat) / GPS_DIFF.lat;
+    _x_s = lround(x_pct_s * MAP_DIM.x);
+    _y_s = lround(y_pct_s * MAP_DIM.y);
+    display->drawXbm(_x_s + MAP_OFFSET.x - (landmark_width / 2), _y_s + MAP_OFFSET.x + (landmark_height / 2),
                             landmark_width, landmark_height, landmark_forest);
 
 
 
-
+    PointPct xy_pct;
+    PointXY xy_pos;
     if (ourNode && hasValidPosition(ourNode)) {
         const meshtastic_PositionLite &op = ourNode->position;
-        x_pct_op = (x0_gps > 0.0) ? (x0_gps - DegD(op.longitude_i)) / w_gps : (DegD(op.longitude_i) - x0_gps) / w_gps;
-        y_pct_op = (y0_gps > 0.0) ? (y0_gps - DegD(op.latitude_i)) / h_gps : (DegD(op.latitude_i) - y0_gps) / h_gps;
-        float _x = round(x_pct_op * map_dim_w);
-        float _y = round(y_pct_op * map_dim_h);
+        // x_pct_op = (GPS_MIN.lon > 0.0) ? (GPS_MIN.lon - DegD(int32_t(gpsStatus->getLongitude()))) / GPS_DIFF.lon : (DegD(int32_t(gpsStatus->getLongitude())) - GPS_MIN.lon) / GPS_DIFF.lon;
+        // y_pct_op = (GPS_MIN.lat > 0.0) ? (GPS_MIN.lat - DegD(int32_t(gpsStatus->getLatitude()))) / GPS_DIFF.lat : DegD(int32_t(gpsStatus->getLatitude()) - GPS_MIN.lat) / GPS_DIFF.lat;
+        // x_pct_op = (GPS_MIN.lon > 0.0) ? (GPS_MIN.lon -  DegD(op.longitude_i)) / GPS_DIFF.lon : (DegD(op.longitude_i) - GPS_MIN.lon) / GPS_DIFF.lon;
+        // y_pct_op = (GPS_MIN.lat > 0.0) ? (GPS_MIN.lat -  DegD(op.latitude_i)) / GPS_DIFF.lat : (DegD(op.latitude_i) - GPS_MIN.lat) / GPS_DIFF.lat;
+        xy_pct = {(GPS_MIN.lon > 0.0) ? (GPS_MIN.lon -  DegD(op.longitude_i)) / GPS_DIFF.lon : (DegD(op.longitude_i) - GPS_MIN.lon) / GPS_DIFF.lon,
+                  (GPS_MIN.lat > 0.0) ? (GPS_MIN.lat -  DegD(op.latitude_i)) / GPS_DIFF.lat : (DegD(op.latitude_i) - GPS_MIN.lat) / GPS_DIFF.lat};
+
+        xy_pos = {lround(MAP_MIN.x + xy_pct.x * double(MAP_DIM.x)),
+                  lround(MAP_MIN.y + xy_pct.y * double(MAP_DIM.y))};
         // display->drawTriangle(_x - 3, _y + 3, _x, _y - 3, _x + 3, _y + 3);
-        display->drawFastImage(_x - 3, _y - 4, 6, 8, imgPositionEmpty);
-    } else {
-            x_pct_op = -0.01;
-            y_pct_op = -0.01;
+        display->drawFastImage(xy_pos.x - 3, xy_pos.y + 4, 6, 8, imgPositionEmpty);
     }
 
     for (uint8_t n_idx = 0; n_idx < nodeDB->getNumMeshNodes(); n_idx++){
@@ -1666,10 +1730,10 @@ static void drawNodeInfoMap(OLEDDisplay *display, OLEDDisplayUiState *state, int
         meshtastic_NodeInfoLite *node = nodeDB->getMeshNodeByIndex(n_idx);
         static char myCoord[20];
         if (node->num == nodeDB->getNodeNum()) {
-            display->drawFastImage(x1 + 2, n_idx * FONT_HEIGHT_SMALL + 2, 6, 8, gpsStatus->getHasLock() ? imgPositionSolid : imgPositionEmpty);
-            snprintf(myCoord, sizeof(myCoord), "%s (%d, %d)", ourNode->user.short_name, round(x_pct_op * 100), round(y_pct_op * 100));
+            display->drawFastImage(MAP_MAX.x + 2, n_idx * FONT_HEIGHT_SMALL + 2, 6, 8, gpsStatus->getHasLock() ? imgPositionSolid : imgPositionEmpty);
+            snprintf(myCoord, sizeof(myCoord), "%s (%d, %d)", ourNode->user.short_name, lround(xy_pct.x * 100), lround(xy_pct.y * 100));
             const char *fields[] = {myCoord, NULL};
-            drawColumns(display, x1 + 10, n_idx * FONT_HEIGHT_SMALL + 2, fields);
+            drawColumns(display, MAP_MAX.x + 10, n_idx * FONT_HEIGHT_SMALL + 2, fields);
             continue;
         }
 
@@ -1679,22 +1743,25 @@ static void drawNodeInfoMap(OLEDDisplay *display, OLEDDisplayUiState *state, int
 
         float x_pct_p = 0.0;
         float y_pct_p = 0.0;
+        uint16_t x_pos_p = 0;
+        uint16_t y_pos_p = 0;
+
+
         if (hasValidPosition(node)) {
             const meshtastic_PositionLite &p = node->position;
 
-            x_pct_p = (x0_gps > 0.0) ? (x0_gps - DegD(p.longitude_i)) / w_gps : (DegD(p.longitude_i) - x0_gps) / w_gps;
-            y_pct_p = (y0_gps > 0.0) ? (y0_gps - DegD(p.latitude_i)) / h_gps : (DegD(p.latitude_i) - y0_gps) / h_gps;
-            float _x = round(x_pct_p * map_dim_w);
-            float _y = round(y_pct_p * map_dim_h);
+            x_pct_p = (GPS_MIN.lon > 0.0) ? (GPS_MIN.lon - DegD(p.longitude_i)) / GPS_DIFF.lon : (DegD(p.longitude_i) - GPS_MIN.lon) / GPS_DIFF.lon;
+            y_pct_p = (GPS_MIN.lat > 0.0) ? (GPS_MIN.lat - DegD(p.latitude_i)) / GPS_DIFF.lat : (DegD(p.latitude_i) - GPS_MIN.lat) / GPS_DIFF.lat;
+            x_pos_p = lround(x_pct_p * 100);
+            y_pos_p = lround(y_pct_p * 100);
             if ((agoSecs / 60 / 60) < 24) {
-                display->drawCircle(_x, _y, 2);
+                display->drawCircle(x_pos_p, y_pos_p, 2);
                 display->setFont(FONT_SMALL);
+                #ifndef HELTEC_TRACKER_V1_X
                 String abbr(username[0]);
                 display->drawString(_x + 3, _y - (FONT_HEIGHT_SMALL / 2), abbr);
+                #endif
             }
-        } else {
-            x_pct_p = -0.01;
-            y_pct_p = -0.01;
         }
 
         static char signalStr[20];
@@ -1717,18 +1784,18 @@ static void drawNodeInfoMap(OLEDDisplay *display, OLEDDisplayUiState *state, int
         bool useTimestamp = deltaToTimestamp(agoSecs, &timestampHours, &timestampMinutes, &daysAgo);
 
         if (agoSecs < 90) // last 2 mins?
-            snprintf(lastStr, sizeof(lastStr), "%s: %us (%d,%d)", username, agoSecs, round(x_pct_p * 100), round(y_pct_p * 100));
+            snprintf(lastStr, sizeof(lastStr), "%s: %us (%d,%d)", username, agoSecs, x_pos_p, y_pos_p);
         // -- if suitable for timestamp --
         else if (agoSecs < 90 * SECONDS_IN_MINUTE) // Last 15 minutes
-            snprintf(lastStr, sizeof(lastStr), "%s: %um (%d,%d)", username, agoSecs / SECONDS_IN_MINUTE, round(x_pct_p * 100), round(y_pct_p * 100));
+            snprintf(lastStr, sizeof(lastStr), "%s: %um (%d,%d)", username, agoSecs / SECONDS_IN_MINUTE, x_pos_p, y_pos_p);
         else if ((agoSecs / 60 / 60) < 10)
-            snprintf(lastStr, sizeof(lastStr), "%s: %.1fh (%d,%d)", username, float(agoSecs) / 60 / 60, round(x_pct_p * 100), round(y_pct_p * 100));
+            snprintf(lastStr, sizeof(lastStr), "%s: %.1fh (%d,%d)", username, float(agoSecs) / 60 / 60, x_pos_p, y_pos_p);
         else if ((agoSecs / 60 / 60) < 24)
-            snprintf(lastStr, sizeof(lastStr), "%s: %uh (%d,%d)", username, agoSecs / 60 / 60, round(x_pct_p * 100), round(y_pct_p * 100));
+            snprintf(lastStr, sizeof(lastStr), "%s: %uh (%d,%d)", username, agoSecs / 60 / 60, x_pos_p, y_pos_p);
         else if (daysAgo >= 1 && daysAgo <= 9) // Last six months (capped by deltaToTimestamp method)
-            snprintf(lastStr, sizeof(lastStr), "%s: %lid (%d,%d)", username, (long)daysAgo, round(x_pct_p * 100), round(y_pct_p * 100));
+            snprintf(lastStr, sizeof(lastStr), "%s: %lid (%d,%d)", username, (long)daysAgo, x_pos_p, y_pos_p);
         else
-            snprintf(lastStr, sizeof(lastStr), "%s: ? (%d,%d)", username, round(x_pct_p * 100), round(y_pct_p * 100));
+            snprintf(lastStr, sizeof(lastStr), "%s: ? (%d,%d)", username, x_pos_p, y_pos_p);
 
         static char distStr[20];
 
@@ -1741,20 +1808,20 @@ static void drawNodeInfoMap(OLEDDisplay *display, OLEDDisplayUiState *state, int
         // const char *fields[] = {username, lastStr, signalStr, distStr, NULL};
         const char *fields[] = {lastStr, NULL};
 
-        drawColumns(display, x1 + 3, n_idx * FONT_HEIGHT_SMALL + 2, fields);
+        drawColumns(display, MAP_MAX.x + 3, n_idx * FONT_HEIGHT_SMALL + 2, fields);
     }
 
-        // display->drawRect(map_offset_w, map_offset_h, map_dim_w - (2*map_offset_w), map_dim_h - (2*map_offset_h));
-        // display->drawRect(0 + x, 0 + y, x + map_dim_w, y + map_dim_h);
-        // display->drawRect(compassX, compassY, compassX + map_dim_w, compassY + map_dim_h);
-        // snprintf(distStr, sizeof(distStr), "%d, %d, %d, %d", map_offset_h, map_offset_h, map_offset_h + map_dim_w, map_offset_h + map_dim_h);
+        // display->drawRect(MAP_OFFSET.x, MAP_OFFSET.y, MAP_DIM.x - (2*MAP_OFFSET.x), MAP_DIM.y - (2*MAP_OFFSET.y));
+        // display->drawRect(0 + x, 0 + y, x + MAP_DIM.x, y + MAP_DIM.y);
+        // display->drawRect(compassX, compassY, compassX + MAP_DIM.x, compassY + MAP_DIM.y);
+        // snprintf(distStr, sizeof(distStr), "%d, %d, %d, %d", MAP_OFFSET.y, MAP_OFFSET.y, MAP_OFFSET.y + MAP_DIM.x, MAP_OFFSET.y + MAP_DIM.y);
         // snprintf(distStr, sizeof(distStr), "%.2f, %.2f", x_pct_op, y_pct_op);
 
     if (config.display.displaymode == meshtastic_Config_DisplayConfig_DisplayMode_INVERTED) {
         display->setColor(BLACK);
     }
     // Must be after distStr is populated
-    // drawColumns(display, x1 + 3, y, fields);
+    // drawColumns(display, XY_MAX.x + 3, y, fields);
 }
 
 Screen::Screen(ScanI2C::DeviceAddress address, meshtastic_Config_DisplayConfig_OledType screenType, OLEDDISPLAY_GEOMETRY geometry)
