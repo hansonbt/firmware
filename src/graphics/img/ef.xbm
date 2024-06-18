@@ -29,7 +29,7 @@ struct PointXY
 #if defined(HELTEC_TRACKER_V1_X)
 static const PointXY MAP_DIM = {80, 80};
 #else
-static const PointXY MAP_DIM = {200, 100};
+static const PointXY MAP_DIM = {100, 200};
 #endif
 
 static const PointXY MAP_OFFSET = {0, 0};

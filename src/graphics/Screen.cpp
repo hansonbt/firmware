@@ -1670,19 +1670,19 @@ static void drawNodeInfoMap(OLEDDisplay *display, OLEDDisplayUiState *state, int
     // 33.98730162924576, -118.47549733831522
     xy_pct = point_gps2pct(33.98730162924576, -118.47549733831522);
     xy_pos = point_pct2pos(xy_pct);
-    display->drawXbm(xy_pos.x + (landmark_width / 2), xy_pos.y + (landmark_height / 2),
+    display->drawXbm(xy_pos.x - (landmark_width / 2), xy_pos.y - (landmark_height / 2),
                     landmark_width, landmark_height, landmark_honeycomb);
 
     // 33.98776623944731, -118.472271235067543
     xy_pct = point_gps2pct(33.98776623944731, -118.472271235067543);
     xy_pos = point_pct2pos(xy_pct);
-    display->drawXbm(xy_pos.x + (landmark_width / 2), xy_pos.y + (landmark_height / 2),
+    display->drawXbm(xy_pos.x - (landmark_width / 2), xy_pos.y - (landmark_height / 2),
                     landmark_width, landmark_height, landmark_forest);
 
     // 33.99348665849694, -118.47919301569027
     xy_pct = point_gps2pct(33.99348665849694, -118.47919301569027);
     xy_pos = point_pct2pos(xy_pct);
-    display->drawXbm(xy_pos.x + (landmark_width / 2), xy_pos.y + (landmark_height / 2),
+    display->drawXbm(xy_pos.x - (landmark_width / 2), xy_pos.y - (landmark_height / 2),
                     landmark_width, landmark_height, landmark_carousel);
 
 
@@ -1702,7 +1702,7 @@ static void drawNodeInfoMap(OLEDDisplay *display, OLEDDisplayUiState *state, int
         xy_pos = point_pct2pos(xy_pct);
 
         // display->drawTriangle(_x - 3, _y + 3, _x, _y - 3, _x + 3, _y + 3);
-        display->drawFastImage(xy_pos.x - 3, xy_pos.y - 4, 6, 8, imgPositionEmpty);
+        display->drawFastImage(xy_pos.x - 4, xy_pos.y - 4, 6, 8, imgPositionEmpty);
     }
 
     for (uint8_t n_idx = 0; n_idx < nodeDB->getNumMeshNodes(); n_idx++){
@@ -1714,7 +1714,7 @@ static void drawNodeInfoMap(OLEDDisplay *display, OLEDDisplayUiState *state, int
             snprintf(myCoord, sizeof(myCoord), "%s (%d, %d)", ourNode->user.short_name, lround(xy_pct.x * 100), lround(xy_pct.y * 100));
             // snprintf(myCoord, sizeof(myCoord), "(%d, %d) (%d, %d) (%d, %d)(%d, %d)", MAP_DIM.x, MAP_DIM.y, MAP_MIN.x, MAP_MIN.y, MAP_MAX.x, MAP_MAX.y, MAP_DIM.x, MAP_DIM.y);
             const char *fields[] = {myCoord, NULL};
-            drawColumns(display, MAP_MAX.x, n_idx * FONT_HEIGHT_SMALL + 2, fields);
+            drawColumns(display, MAP_MAX.x + 10, n_idx * FONT_HEIGHT_SMALL + 2, fields);
             continue;
         }
 
@@ -1741,7 +1741,7 @@ static void drawNodeInfoMap(OLEDDisplay *display, OLEDDisplayUiState *state, int
                 display->setFont(FONT_SMALL);
                 #ifndef HELTEC_TRACKER_V1_X
                 String abbr(username[0]);
-                display->drawString(_x + 3, _y - (FONT_HEIGHT_SMALL / 2), abbr);
+                display->drawString(xy_pos.x + 3, xy_pos.y - (FONT_HEIGHT_SMALL / 2), abbr);
                 #endif
             }
         }
