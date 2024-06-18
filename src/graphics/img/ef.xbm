@@ -2,3 +2,57 @@
 #define landmark_height 7
 static unsigned char landmark_honeycomb[] = {0x86,0x89,0xbe,0xcc,0xbe,0x89,0x86};
 static unsigned char landmark_forest[] = {0x88,0x9c,0xaa,0x9c,0xaa,0x88,0x88};
+static unsigned char landmark_carousel[] = { 0x80,0x9c,0xa2,0xc9,0xd5,0xff,0x80};
+
+
+
+struct PointGPS
+{
+     double lat;
+     double lon;
+};
+
+struct PointPct
+{
+     double x;
+     double y;
+};
+
+struct PointXY
+{
+     int x;
+     int y;
+};
+
+
+// static const PointXY MAP_DIM = {lround(SCREEN_HEIGHT * 0.8),  SCREEN_HEIGHT};
+#if defined(HELTEC_TRACKER_V1_X)
+static const PointXY MAP_DIM = {80, 80};
+#else
+static const PointXY MAP_DIM = {200, 100};
+#endif
+
+static const PointXY MAP_OFFSET = {0, 0};
+static const PointXY MAP_MIN = {MAP_OFFSET.x, MAP_OFFSET.y};
+static const PointXY MAP_MAX = {MAP_OFFSET.x + MAP_DIM.x, MAP_OFFSET.y + MAP_DIM.y};
+// top left, bottom right
+static const PointGPS GPS_MIN = { 33.994292354093766, -118.48362524758959};
+static const PointGPS GPS_MAX = { 33.98449037415861, -118.46955881796222};
+static const PointGPS GPS_DIFF = {(GPS_MIN.lat > 0.0) ? GPS_MIN.lat - GPS_MAX.lat : GPS_MAX.lat - GPS_MIN.lat,
+                           (GPS_MIN.lon > 0.0) ? GPS_MIN.lon - GPS_MAX.lon : GPS_MAX.lon - GPS_MIN.lon};
+
+
+static PointPct point_gps2pct(double lat, double lon) {
+    PointPct xy_pct = {(GPS_MIN.lon > 0.0) ? (GPS_MIN.lon -  lon) / GPS_DIFF.lon : (lon - GPS_MIN.lon) / GPS_DIFF.lon,
+                       (GPS_MIN.lat > 0.0) ? (GPS_MIN.lat -  lat) / GPS_DIFF.lat : (lat - GPS_MIN.lat) / GPS_DIFF.lat};
+
+    return xy_pct;
+};
+
+
+static PointXY point_pct2pos(const PointPct &xy_pct) {
+    PointXY xy_pos = {lround(MAP_MIN.x + xy_pct.x * double(MAP_DIM.x)),
+                      lround(MAP_MIN.y + xy_pct.y * double(MAP_DIM.y))};
+
+    return xy_pos;
+};
