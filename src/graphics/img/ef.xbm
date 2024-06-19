@@ -3,6 +3,9 @@
 static unsigned char landmark_honeycomb[] = {0x86,0x89,0xbe,0xcc,0xbe,0x89,0x86};
 static unsigned char landmark_forest[] = {0x88,0x9c,0xaa,0x9c,0xaa,0x88,0x88};
 static unsigned char landmark_carousel[] = { 0x80,0x9c,0xa2,0xc9,0xd5,0xff,0x80};
+static unsigned char landmark_ranch[] = {0xa1,0xfa,0xdc,0x9e,0x92,0xb5,0xd5};
+static unsigned char landmark_entrance[] = {0xa2,0xd5,0xff,0xdd,0xd5,0xd5,0xf7};
+
 
 
 
@@ -36,8 +39,17 @@ static const PointXY MAP_OFFSET = {0, 0};
 static const PointXY MAP_MIN = {MAP_OFFSET.x, MAP_OFFSET.y};
 static const PointXY MAP_MAX = {MAP_OFFSET.x + MAP_DIM.x, MAP_OFFSET.y + MAP_DIM.y};
 // top left, bottom right
+
+/*
+// venice
 static const PointGPS GPS_MIN = { 33.994292354093766, -118.48362524758959};
 static const PointGPS GPS_MAX = { 33.98449037415861, -118.46955881796222};
+*/
+
+// chicago
+static const PointGPS GPS_MIN = { 41.91394871905815, -87.69722346513996};
+static const PointGPS GPS_MAX = { 41.90310543097628, -87.6870355881403};
+
 static const PointGPS GPS_DIFF = {(GPS_MIN.lat > 0.0) ? GPS_MIN.lat - GPS_MAX.lat : GPS_MAX.lat - GPS_MIN.lat,
                            (GPS_MIN.lon > 0.0) ? GPS_MIN.lon - GPS_MAX.lon : GPS_MAX.lon - GPS_MIN.lon};
 

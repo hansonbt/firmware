@@ -1667,28 +1667,43 @@ static void drawNodeInfoMap(OLEDDisplay *display, OLEDDisplayUiState *state, int
     *********************/
     PointPct xy_pct;
     PointXY xy_pos;
+
+    /*
     // 33.98730162924576, -118.47549733831522
     xy_pct = point_gps2pct(33.98730162924576, -118.47549733831522);
     xy_pos = point_pct2pos(xy_pct);
     display->drawXbm(xy_pos.x - (landmark_width / 2), xy_pos.y - (landmark_height / 2),
-                    landmark_width, landmark_height, landmark_honeycomb);
+                     landmark_width, landmark_height, landmark_honeycomb);
 
     // 33.98776623944731, -118.472271235067543
     xy_pct = point_gps2pct(33.98776623944731, -118.472271235067543);
     xy_pos = point_pct2pos(xy_pct);
     display->drawXbm(xy_pos.x - (landmark_width / 2), xy_pos.y - (landmark_height / 2),
-                    landmark_width, landmark_height, landmark_forest);
+                     landmark_width, landmark_height, landmark_forest);
 
     // 33.99348665849694, -118.47919301569027
     xy_pct = point_gps2pct(33.99348665849694, -118.47919301569027);
     xy_pos = point_pct2pos(xy_pct);
     display->drawXbm(xy_pos.x - (landmark_width / 2), xy_pos.y - (landmark_height / 2),
-                    landmark_width, landmark_height, landmark_carousel);
+                     landmark_width, landmark_height, landmark_carousel);
+    */
+
+    // 41.91075749500347, -87.68878656193633
+    xy_pct = point_gps2pct(41.91075749500347, -87.68878656193633);
+    xy_pos = point_pct2pos(xy_pct);
+    display->drawXbm(xy_pos.x - (landmark_width / 2), xy_pos.y - (landmark_height / 2),
+                     landmark_width, landmark_height, landmark_ranch);
+
+    // 41.91014868134129, -87.69272415863851
+    xy_pct = point_gps2pct(41.91014868134129, -87.69272415863851);
+    xy_pos = point_pct2pos(xy_pct);
+    display->drawXbm(xy_pos.x - (landmark_width / 2), xy_pos.y - (landmark_height / 2),
+                     landmark_width, landmark_height, landmark_entrance);
 
 
     if (ourNode && hasValidPosition(ourNode)) {
         const meshtastic_PositionLite &op = ourNode->position;
-        xy_pct = {0, 0};
+        xy_pct = {0.0, 0.0};
         xy_pos = {0, 0};
         // x_pct_op = (GPS_MIN.lon > 0.0) ? (GPS_MIN.lon - DegD(int32_t(gpsStatus->getLongitude()))) / GPS_DIFF.lon : (DegD(int32_t(gpsStatus->getLongitude())) - GPS_MIN.lon) / GPS_DIFF.lon;
         // y_pct_op = (GPS_MIN.lat > 0.0) ? (GPS_MIN.lat - DegD(int32_t(gpsStatus->getLatitude()))) / GPS_DIFF.lat : DegD(int32_t(gpsStatus->getLatitude()) - GPS_MIN.lat) / GPS_DIFF.lat;
@@ -1701,8 +1716,10 @@ static void drawNodeInfoMap(OLEDDisplay *display, OLEDDisplayUiState *state, int
         xy_pct = point_gps2pct(DegD(op.latitude_i), DegD(op.longitude_i));
         xy_pos = point_pct2pos(xy_pct);
 
-        // display->drawTriangle(_x - 3, _y + 3, _x, _y - 3, _x + 3, _y + 3);
-        display->drawFastImage(xy_pos.x - 4, xy_pos.y - 4, 6, 8, imgPositionEmpty);
+        if ((sinceLastSeenLoc(ourNode) / 60) < 5) {
+            // display->drawTriangle(_x - 3, _y + 3, _x, _y - 3, _x + 3, _y + 3);
+            display->drawFastImage(xy_pos.x - 4, xy_pos.y - 4, 6, 8, imgPositionEmpty);
+        }
     }
 
     for (uint8_t n_idx = 0; n_idx < nodeDB->getNumMeshNodes(); n_idx++){
@@ -1726,7 +1743,7 @@ static void drawNodeInfoMap(OLEDDisplay *display, OLEDDisplayUiState *state, int
 
         if (hasValidPosition(node)) {
             const meshtastic_PositionLite &p = node->position;
-            xy_pct = {0, 0};
+            xy_pct = {0.0, 0.0};
             xy_pos = {0, 0};
 
             xy_pct = point_gps2pct(DegD(p.latitude_i), DegD(p.longitude_i));
@@ -1736,7 +1753,7 @@ static void drawNodeInfoMap(OLEDDisplay *display, OLEDDisplayUiState *state, int
             // y_pct_p = (GPS_MIN.lat > 0.0) ? (GPS_MIN.lat - DegD(p.latitude_i)) / GPS_DIFF.lat : (DegD(p.latitude_i) - GPS_MIN.lat) / GPS_DIFF.lat;
             // x_pos_p = lround(x_pct_p * 100);
             // y_pos_p = lround(y_pct_p * 100);
-            if ((agoSecs / 60 / 60) < 24) {
+            if ((agoSecs / 60 / 60) < 1) {
                 display->drawCircle(xy_pos.x, xy_pos.y, 2);
                 display->setFont(FONT_SMALL);
                 #ifndef HELTEC_TRACKER_V1_X
